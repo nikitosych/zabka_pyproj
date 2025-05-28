@@ -1,7 +1,7 @@
 import os
 from customtkinter import *
 from utils import logger
-from helpers.handlers import *
+from helpers.api import *
 from helpers.positioners import *
 from secrets import token_urlsafe
 
@@ -52,11 +52,14 @@ def app(host, port):
             CTkLabel(inner, text=f"Błąd podczas pobierania produktów: {products.get('error')}", text_color="red").pack(pady=5)
         else:
             if len(products.get("products")) == 0:
-                CTkLabel(inner, text="Brak produktów w katalogu", text_color="red").pack(pady=5)
+                h2(CTkLabel(inner, text="Brak produktów w katalogu", text_color="red"))
                 logger.log("Wyświetlam brak produktow")
             else:
-                for product in products.get("products"):
-                    CTkLabel(inner, text=f"{product['name']} - {product['price']} PLN").pack(pady=5)
+                columns = get_product(0, client_token, hostname)
+                if columns.get("error"):
+                    CTkLabel(inner, text=f"Błąd podczas pobierania nagłowków: {products.get('error')}", text_color="red").pack(pady=5)
+                else:
+                    nest(render_table(inner, columns, products.get("products")), padx=20, pady=20)
 
         if current_session and current_session.get("is_admin", True):
             btn(CTkButton(inner, text="Dodaj produkt", command=lambda: switch_to(render_add_product)))
@@ -67,6 +70,27 @@ def app(host, port):
         nest(inner)
         return frame
     
+    def render_table(frame: CTkFrame, columns: list, rows: dict):
+        tframe = CTkFrame(frame, bg_color="#A0A79D")
+        header:list[CTkLabel] = []
+        for i, col in enumerate(columns):
+            header_cell = CTkLabel(tframe, text=col, font=("Arial", 15, "bold"), bg_color="#4C872B", border_color="#FFFFFF")
+            header_cell.grid(row=0, column=i, padx=10, pady=5)
+            header.insert(header_cell)
+        
+        oldwidth:int
+        
+        for i, row in enumerate(rows):
+            for j, data in enumerate(row):
+                cur_width = len(data) * 3
+                if cur_width > oldwidth:
+                    header[j].configure(width=cur_width)
+                data_cell = CTkLabel(tframe, width=oldwidth, text=data, font=("Arial", 12, "regular"), border_color="#FFFFFF")
+                data_cell.grid(row=i, column=j, padx=10, pady=5)
+
+        return tframe
+
+
 
     def render_add_product():
         frame = CTkFrame(root)
@@ -293,7 +317,7 @@ def app(host, port):
 
     root = CTk()
     root.title("Frog Store")
-    root.iconbitmap(os.path.join(os.getcwd(), "app", "resources", "favicon.ico"))
+    root.iconbitmap(os.path.join(os.getcwd(), "resources", "favicon.ico"))
     root.geometry(f"1280x720+{(root.winfo_screenwidth() - 1280) // 2}+{(root.winfo_screenheight() - 720) // 2}")
     root.resizable(False, False)
 
