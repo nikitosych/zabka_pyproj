@@ -46,7 +46,7 @@ def remove_product(product_id: int, client_token: str, host):
     return res.json() if res.status_code == 200 else {"error": res.text}
 
 def get_product(product_id: int, client_token: str, host):
-    res = req.post(
+    res = req.get(
         f"http://{host}/products/{product_id}?performer_token={client_token}"
     )
     return res.json() if res.status_code == 200 else {"error": res.text}
