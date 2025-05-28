@@ -77,6 +77,9 @@ async def get_products():
 async def get_product(product_id: int):
     try:
         products = read_products_file(products_file)
+        if (product_id == 0):
+            return JSONResponse(content={"columns": products.columns.to_list()})
+
         product = products[products['id'] == product_id]
         if product.empty:
             return JSONResponse(content={"error": "Product not found"}, status_code=404)
