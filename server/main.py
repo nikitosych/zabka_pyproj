@@ -1,19 +1,28 @@
+"""
+Prosty API serwer do zarządzania produktami i użytkownikami.
+Serwer ten umożliwia dodawanie, usuwanie i przeglądanie produktów oraz zarządzanie użytkownikami 
+w systemie
+Serwer korzysta z FastAPI do obsługi ządań HTTP i Pandas do zarządzania danymi w formacie CSV i excel
+"""
+
+
 import os
 import pandas as pd
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from random import randint
 
 database = os.path.join(os.getcwd(), "DATABASE")
 products_file = os.path.join(database, "products.csv")
-users_file = os.path.join(database, "users.xlsx")
+users_file = os.path.join(database, "customers.xlsx")
 
 current_sessions = {}  # Proste zabiezpieczeństw
 
 
 class Product(BaseModel):
     name: str
-    price: float
+    price: str
     quantity: int
     description: str
     category: str
@@ -40,7 +49,7 @@ def read_users_file(filepath):
     try:
         return pd.read_excel(filepath)
     except FileNotFoundError:
-        df = pd.DataFrame(columns=['name', 'surname', 'age', 'login', 'password', 'admin'])
+        df = pd.DataFrame(columns=['id', 'name', 'surname', 'age', 'login', 'password', 'admin'])
         df.to_excel(filepath, index=False)
         return df
 
@@ -77,8 +86,6 @@ async def get_products():
 async def get_product(product_id: int):
     try:
         products = read_products_file(products_file)
-        if (product_id == 0):
-            return JSONResponse(content={"columns": products.columns.to_list()})
 
         product = products[products['id'] == product_id]
         if product.empty:
@@ -109,15 +116,26 @@ async def add_product(product: Product, performer_token: str):
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 @app.post("/remove_product/{product_id}")
-async def remove_product(product_id: int, performer_token: str):
+async def remove_product(product_id: int | str, performer_token: str):
     try:
         if not check_token(performer_token, requiresAdmin=True):
             return JSONResponse(content={"error": "Brak uprawnień do wykonania tej operacji"}, status_code=401)
         
         products = read_products_file(products_file)
-        products = products[products['id'] != product_id]
-        write_file(products_file, products)
-        return JSONResponse(content={"message": "Product removed successfully"})
+
+        # https://stackoverflow.com/questions/3501382/checking-whether-a-variable-is-an-integer-or-not
+        if isinstance(product_id, int):
+            if products[products['id'] == product_id].empty:
+                return JSONResponse(content={"message": "Nie znaleziono produktu"}, status_code=404)
+            products = products[products['id'] != product_id]
+        else:
+            if products[products['name'] == product_id].empty:
+                return JSONResponse(content={"message": "Nie znaleziono produktu"}, status_code=404)
+            products = products[products['name'] != product_id]
+
+        write_file(users_file, products)
+
+        return JSONResponse(content={"message": "Product removed successfully"}, status_code=200)
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
@@ -125,7 +143,7 @@ async def remove_product(product_id: int, performer_token: str):
 async def list_users():
     try:
         users = read_users_file(users_file)
-        return JSONResponse(content=users.to_dict(orient="records"))
+        return JSONResponse(content={"users": users.to_dict(orient="records")})
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
@@ -140,7 +158,16 @@ async def register(user: User):
         if not users[users["login"] == user.login].empty:
             return JSONResponse(content={"error": "Użytkownik o podanym login już istnieje w BD"}, status_code=400)
 
+        rid = 1
+        ids= users["id"].to_list()
+        while True:
+            c = randint(1, 9999)
+            if c not in ids:
+                rid = c
+                break
+
         new_user = pd.DataFrame([{
+            'id': rid,
             'name': user.name,
             'surname': user.surname,
             'age': user.age,
@@ -150,6 +177,8 @@ async def register(user: User):
         }])
         users = pd.concat([users, new_user], ignore_index=True)
         write_file(users_file, users, is_excel=True)
+        user_id = new_user["id"].iloc[0]
+        open(os.path.join(database, f"{user_id}.txt"), "w").close()
         return JSONResponse(content={"message": "Pomyślnie zarejestrowano użytkownika"})
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)

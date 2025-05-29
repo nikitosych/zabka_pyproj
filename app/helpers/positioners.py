@@ -3,6 +3,14 @@ from customtkinter import *
 def h1(label: CTkLabel, **kwargs):
     label.pack(ipady=15, ipadx=25, **kwargs)
 
+def imp_h2(func):
+    def inner(*args, **kwargs):
+        print("Użyto dekoratora imp_h2")
+        func(*args, **kwargs)
+    
+    return inner
+
+@imp_h2
 def h2(label: CTkLabel, **kwargs):
     label.pack(ipady=12, ipadx=25, **kwargs)
 
