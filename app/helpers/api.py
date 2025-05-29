@@ -38,6 +38,15 @@ def add_product(product: dict, client_token: str, host):
     )
     return res.json() if res.status_code == 200 else {"error": res.text}
 
+def list_users(client_token: str, host):
+    res = req.get(f"http://{host}/users?performer_token={client_token}")
+    return res.json() if res.status_code == 200 else {"error": res.text}
+
+def remove_user(login: int, client_token: str, host):
+    res = req.post(
+        f"http://{host}/remuser/{login}?performer_token={client_token}"
+    )
+    return res.json() if res.status_code == 200 else {"error": res.text}
 
 def remove_product(product_id: int, client_token: str, host):
     res = req.post(
@@ -48,5 +57,11 @@ def remove_product(product_id: int, client_token: str, host):
 def get_product(product_id: int, client_token: str, host):
     res = req.get(
         f"http://{host}/products/{product_id}?performer_token={client_token}"
+    )
+    return res.json() if res.status_code == 200 else {"error": res.text}
+
+def logout(client_token: str, login:str, host):
+    res = req.post(
+        f"http://{host}/logout/{login}?performer_token={client_token}"
     )
     return res.json() if res.status_code == 200 else {"error": res.text}

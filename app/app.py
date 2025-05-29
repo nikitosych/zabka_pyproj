@@ -1,3 +1,13 @@
+"""
+Aplikacja Frog Store
+
+Program do zarządzania sklepem internetowym, który pozwala na przeglądanie produktów,
+dodawanie ich do koszyka, zarządzanie użytkownikami oraz logowanie i rejestrację
+
+Korzysta z zasady dynamicznego renderowania interfejsu użytkownika
+"""
+
+
 import os
 from customtkinter import *
 from utils import logger
@@ -10,6 +20,12 @@ def app(host, port):
     hostname = f"{host}:{port}"
 
     def switch_to(frame_fn):
+        """
+        Funkcja do przełączania między różnymi widokami aplikacji.
+
+        Args:
+            frame_fn (function): Funkcja zwracająca nowy frame do wyświetlania
+        """
         logger.info(f"Przełączam na {frame_fn.__name__}")
         nonlocal current_frame
         if current_frame:
@@ -28,16 +44,50 @@ def app(host, port):
         current_frame.pack(expand=True, fill=BOTH)
 
     def render_main():
+        def handle_logout():
+            nonlocal current_session
+            logger.info("Wyogowywanie")
+            logout(client_token, current_session["login"], hostname)
+            current_session = None
+            switch_to(render_main)
+
         frame = CTkFrame(root)
         inner = CTkFrame(frame) # Wrapper
 
         h1(CTkLabel(inner, text="Strona główna", font=("Arial", 20)))
-        btn(CTkButton(inner, text="Logowanie", command=lambda: switch_to(render_login)))
+        btn(CTkButton(inner, text="Logowanie", command=lambda: switch_to(render_login))) if not current_session else None
         btn(CTkButton(inner, text="Przeglądaj katalog", command=lambda: switch_to(render_catalog)))
-
+        btn(CTkButton(inner, text="Przeglądaj użytkowników", command=lambda: switch_to(render_users)))
+        btn(CTkButton(inner, text="Przeglądaj koszyk", command=lambda: switch_to(render_cart))) if current_session else None
+        btn(CTkButton(inner, text="Wyloguj", command=handle_logout)) if current_session else None
         nest(inner)
 
         return frame
+    
+    def render_users():
+        frame = CTkFrame(root)
+        inner = CTkFrame(frame)
+
+        h1(CTkLabel(inner, text="Lista użytkowników", font=("Arial", 20)))
+
+        users = list_users(client_token, hostname)
+        if users.get("error"):
+            CTkLabel(inner, text=f"Błąd podczas pobierania produktów: {users.get('error')}", text_color="red").pack(pady=5)
+        else:
+            if len(users.get("users")) == 0:
+                h2(CTkLabel(inner, text="Brak użytkowników w BD", text_color="red"))
+                logger.log("Wyświetlam brak użytkowników")
+            else:
+                for item in users.get("users"):
+                    h2(CTkLabel(inner, text=f"{"[ADMIN]" if item["admin"] else ""} {item["name"]} {item["surname"]} ({item["login"]}), {item["age"]} lat"))
+                    btn(CTkButton(inner, text="Usuń", command=lambda: remove_user(item["login"], client_token, hostname))) if current_session and current_session.get("is_admin", True) else None
+        
+        btn(CTkButton(inner, text="Wróć do głownej", command=lambda: switch_to(render_main)))
+        
+        nest(inner)
+        
+        return frame
+                    
     
     def render_catalog():
         frame = CTkFrame(root)
@@ -55,11 +105,7 @@ def app(host, port):
                 h2(CTkLabel(inner, text="Brak produktów w katalogu", text_color="red"))
                 logger.log("Wyświetlam brak produktow")
             else:
-                columns = get_product(0, client_token, hostname)
-                if columns.get("error"):
-                    CTkLabel(inner, text=f"Błąd podczas pobierania nagłowków: {products.get('error')}", text_color="red").pack(pady=5)
-                else:
-                    nest(render_table(inner, columns, products.get("products")), padx=20, pady=20)
+                render_table(inner, products.get("products")).pack(padx=20, pady=20)
 
         if current_session and current_session.get("is_admin", True):
             btn(CTkButton(inner, text="Dodaj produkt", command=lambda: switch_to(render_add_product)))
@@ -70,27 +116,81 @@ def app(host, port):
         nest(inner)
         return frame
     
-    def render_table(frame: CTkFrame, columns: list, rows: dict):
+    def render_table(frame: CTkFrame, rows: list[dict]):
+        # https://customtkinter.tomschimansky.com/tutorial/grid-system/
         tframe = CTkFrame(frame, bg_color="#A0A79D")
-        header:list[CTkLabel] = []
+
+        columns = list(rows[0].keys())
+        columns.append("Akcje")
+        columns.append("W koszyku")
+
         for i, col in enumerate(columns):
-            header_cell = CTkLabel(tframe, text=col, font=("Arial", 15, "bold"), bg_color="#4C872B", border_color="#FFFFFF")
-            header_cell.grid(row=0, column=i, padx=10, pady=5)
-            header.insert(header_cell)
-        
-        oldwidth:int
-        
-        for i, row in enumerate(rows):
-            for j, data in enumerate(row):
-                cur_width = len(data) * 3
-                if cur_width > oldwidth:
-                    header[j].configure(width=cur_width)
-                data_cell = CTkLabel(tframe, width=oldwidth, text=data, font=("Arial", 12, "regular"), border_color="#FFFFFF")
-                data_cell.grid(row=i, column=j, padx=10, pady=5)
+            if i == 0: continue
+            header_cell = CTkLabel(tframe, text=col, font=("Arial", 15, "bold"))
+            header_cell.grid(row=0, column=i, padx=10, pady=5, sticky=NSEW)
+            tframe.grid_columnconfigure(i, weight=1) 
+
+        for i, row in enumerate(rows, 1):
+            for j, col in enumerate(columns):
+                if col == "Akcje":
+                    btn_frame = CTkFrame(tframe)
+                    CTkButton(btn_frame, text="+", width=40, command=lambda r=row: add_to_cart(r, False)).pack(side=LEFT, padx=2)
+                    CTkButton(btn_frame, text="-", width=40, command=lambda r=row: add_to_cart(r, True)).pack(side=LEFT, padx=2)
+                    btn_frame.grid(row=i, column=j, padx=10, pady=5, sticky=NSEW)
+                elif col == "W koszyku":
+                    count = 0
+                    for target in cart:
+                        if target[0]["id"] == row["id"]:
+                            count = target[1]
+                    var = StringVar(value=str(count)) # robmy analog UseState z Reactu
+                    cart_vars[row["id"]] = var
+                    CTkEntry(tframe, textvariable=var, font=("Arial", 12), state="readonly").grid(row=i, column=j, padx=10, pady=5, sticky=NSEW)
+                else:
+                    data_cell = CTkLabel(tframe, text=str(row.get(col)), font=("Arial", 12))
+                    data_cell.grid(row=i, column=j, padx=10, pady=5, sticky=NSEW)
 
         return tframe
+    
+    def render_cart():
+        frame = CTkFrame(root)
+        inner = CTkFrame(frame)
 
+        h1(CTkLabel(inner, text="Koszyk", font=("Arial", 20)))
 
+        if not cart:
+            h2(CTkLabel(inner, text="Koszyk jest pusty", text_color="red"))
+            logger.log("Wyświetlam pusty koszyk")
+        else:
+            render_table(inner, [item[0] for item in cart]).pack(padx=20, pady=20)
+
+        btn(CTkButton(inner, text="Wróć do katalogu", command=lambda: switch_to(render_catalog)))
+        
+        nest(inner)
+
+        return frame
+
+    def add_to_cart(item: dict, remove: bool):
+        found = False
+        for target in cart:
+            if target[0]["id"] == item["id"]:
+                found = True
+                if remove:
+                    if target[1] > 1:
+                        target[1] -= 1
+                    else:
+                        cart.remove(target)
+                else:
+                    target[1] += 1
+                break
+        if not found and not remove:
+            cart.append([item, 1])
+
+        if item["id"] in cart_vars:
+            new_count = 0
+            for target in cart:
+                if target[0]["id"] == item["id"]:
+                    new_count = target[1]
+            cart_vars[item["id"]] = str(new_count)
 
     def render_add_product():
         frame = CTkFrame(root)
@@ -138,7 +238,7 @@ def app(host, port):
         
         response = add_product({
             "name": n,
-            "price": float(p),
+            "price": f"{p} zł",
             "quantity": int(q),
             "description": d,
             "category": c
@@ -161,7 +261,7 @@ def app(host, port):
 
         h1(CTkLabel(inner, text="Usuń produkt", font=("Arial", 20)))
 
-        product_id = CTkEntry(inner, justify=CENTER, placeholder_text="ID produktu do usunięcia")
+        product_id = CTkEntry(inner, justify=CENTER, placeholder_text="ID lub nazwa produktu do usunięcia")
         product_id.pack(pady=5)
 
         btn(CTkButton(inner, text="Usuń produkt", command=lambda: on_remove_product_click(product_id, inner)))
@@ -172,7 +272,7 @@ def app(host, port):
         return frame
 
     def on_remove_product_click(product_id: CTkEntry, inner: CTkFrame):
-        pid = str(product_id.get())
+        pid = product_id.get()
         logger.info(f"Usuwanie produktu o ID: {pid}")
         nonlocal err
         if not pid:
@@ -182,7 +282,7 @@ def app(host, port):
             err.pack(pady=5)
             return
         
-        response = remove_product(int(pid), client_token, hostname)
+        response = remove_product(int(pid) if isinstance(pid, "int") else str(pid), client_token, hostname)
 
         logger.info(f"Odpoeiedz serwera: {response}")
         if not response.get("error"):
@@ -311,6 +411,8 @@ def app(host, port):
     registered = False
     current_session = None
     current_frame = None
+    cart = []
+    cart_vars = {}
 
 
     logger.info(f"Generuję token klienta: {client_token}")
@@ -319,7 +421,7 @@ def app(host, port):
     root.title("Frog Store")
     root.iconbitmap(os.path.join(os.getcwd(), "resources", "favicon.ico"))
     root.geometry(f"1280x720+{(root.winfo_screenwidth() - 1280) // 2}+{(root.winfo_screenheight() - 720) // 2}")
-    root.resizable(False, False)
+    # root.resizable(False, False)
 
     set_appearance_mode("dark")
     set_default_color_theme("green")
