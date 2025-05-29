@@ -72,7 +72,7 @@ def app(host, port):
 
         users = list_users(client_token, hostname)
         if users.get("error"):
-            CTkLabel(inner, text=f"Błąd podczas pobierania produktów: {users.get('error')}", text_color="red").pack(pady=5)
+            CTkLabel(inner, text=f"Błąd podczas pobierania użytkowników: {users.get('error')}", text_color="red").pack(pady=5)
         else:
             if len(users.get("users")) == 0:
                 h2(CTkLabel(inner, text="Brak użytkowników w BD", text_color="red"))
@@ -80,7 +80,7 @@ def app(host, port):
             else:
                 for item in users.get("users"):
                     h2(CTkLabel(inner, text=f"{"[ADMIN]" if item["admin"] else ""} {item["name"]} {item["surname"]} ({item["login"]}), {item["age"]} lat"))
-                    btn(CTkButton(inner, text="Usuń", command=lambda: remove_user(item["login"], client_token, hostname))) if current_session and current_session.get("is_admin", True) else None
+                    btn(CTkButton(inner, text="Usuń", command=lambda login=item["login"]: remove_user(login, client_token, hostname))) if current_session and current_session.get("is_admin") else None
         
         btn(CTkButton(inner, text="Wróć do głownej", command=lambda: switch_to(render_main)))
         
@@ -88,7 +88,6 @@ def app(host, port):
         
         return frame
                     
-    
     def render_catalog():
         frame = CTkFrame(root)
         inner = CTkFrame(frame)
@@ -102,12 +101,13 @@ def app(host, port):
             CTkLabel(inner, text=f"Błąd podczas pobierania produktów: {products.get('error')}", text_color="red").pack(pady=5)
         else:
             if len(products.get("products")) == 0:
-                h2(CTkLabel(inner, text="Brak produktów w katalogu", text_color="red"))
+                label = CTkLabel(inner, text="Brak produktów w katalogu", text_color="red")
+                h2(label)
                 logger.log("Wyświetlam brak produktow")
             else:
                 render_table(inner, products.get("products")).pack(padx=20, pady=20)
 
-        if current_session and current_session.get("is_admin", True):
+        if current_session and current_session.get("is_admin"):
             btn(CTkButton(inner, text="Dodaj produkt", command=lambda: switch_to(render_add_product)))
             btn(CTkButton(inner, text="Usuń produkt", command=lambda: switch_to(render_remove_product)))
                 
@@ -164,6 +164,7 @@ def app(host, port):
             render_table(inner, [item[0] for item in cart]).pack(padx=20, pady=20)
 
         btn(CTkButton(inner, text="Wróć do katalogu", command=lambda: switch_to(render_catalog)))
+        btn(CTkButton(inner, text="Zamów"))
         
         nest(inner)
 
@@ -190,7 +191,7 @@ def app(host, port):
             for target in cart:
                 if target[0]["id"] == item["id"]:
                     new_count = target[1]
-            cart_vars[item["id"]] = str(new_count)
+            cart_vars[item["id"]].set(str(new_count))
 
     def render_add_product():
         frame = CTkFrame(root)
