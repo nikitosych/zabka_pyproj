@@ -1,2 +1,11 @@
 ,id,name,price,quantity,description,category
-0,1,Aloha,12222222.0,2321,Najlepszy produkt,Najlepsze
+0,1,Aloha,12 zł,2321,Najlepszy produkt,Najlepsze
+1,2,Bananix,5.99 zł,1500,Słodkie banany z Ekwadoru,Owoce
+2,3,PizzaMax,22.50 zł,300,Pizza z serem i szynką,Mrożonki
+3,4,Czekobomb,8.75 zł,750,Czekoladowe kulki w polewie,Słodycze
+4,5,Zielony Mix,4.20 zł,1200,Mieszanka sałat bio,Warzywa
+5,6,KawaLux,34.99 zł,420,Mielona kawa arabica 100%,Napoje
+6,7,Sok Fresho,6.30 zł,980,Sok pomarańczowy 100%,Napoje
+7,8,ChrupkiZio,3.10 zł,1340,Chrupki kukurydziane z ziołami,Przekąski
+8,9,MiódPolski,18.45 zł,520,Miód naturalny wielokwiatowy,Produkty pszczele
+9,10,JogurtPro,2.89 zł,1500,Naturalny jogurt bez dodatków,Nabiał
